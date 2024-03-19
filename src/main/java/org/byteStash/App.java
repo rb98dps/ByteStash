@@ -11,15 +11,10 @@ import java.util.Random;
  */
 public class App {
     public static void main(String[] args) throws BadAttributeValueExpException, IOException, NoSuchAlgorithmException {
-       ByteStashFactory<Object> byteStashFactory = ByteStashFactory.builder().withCapacity(1000000L).withHotPercent(0.1f).withWarmPercent(0.2f).withTimeToLive(240L).build();
-       ByteStash<Object> byteStash = byteStashFactory.getByteStash();
-       FSLResponseBody fslResponseBody = new FSLResponseBody("hi","hello","bye");
-        FSLResponseBody fslResponseBody1 = new FSLResponseBody("hi","hello","bye");
-       byteStash.put(fslResponseBody,Integer.valueOf(7));
-       System.out.println(byteStash.get(fslResponseBody1,Integer.class));
+        testCacheNode();
     }
 
-    public void testCacheNode() throws BadAttributeValueExpException {
+    public static void testCacheNode() throws BadAttributeValueExpException {
         int count = 0;
         while (count < 10) {
             CacheNode<Object> cacheNode = new CacheNode<>(10000,0);
