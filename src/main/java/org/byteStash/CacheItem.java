@@ -20,7 +20,7 @@ class CacheItem<T> {
 
     @Setter
     @Getter
-    private CacheRegion region;
+    private CacheRegionType region;
 
     @Override
     public String toString() {
@@ -41,7 +41,7 @@ class CacheItem<T> {
     }
 
 
-    public CacheItem(T value, CacheRegion region, Timestamp timestamp, int nodeNumber) {
+    public CacheItem(T value, CacheRegionType region, Timestamp timestamp, int nodeNumber) {
         this.value = value;
         this.isActive = false;
         this.timestamp = timestamp;

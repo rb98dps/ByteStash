@@ -7,7 +7,7 @@ public class NodeWork<T> {
 
     private final CacheNode<T> cacheNode;
 
-    private final CacheRegion cacheRegion;
+    private final CacheRegionType cacheRegion;
 
     final int pos;
 
@@ -15,7 +15,7 @@ public class NodeWork<T> {
         return cacheNode;
     }
 
-    public CacheRegion getCacheRegion() {
+    public CacheRegionType getCacheRegion() {
         return cacheRegion;
     }
 
@@ -23,7 +23,7 @@ public class NodeWork<T> {
         return pos;
     }
 
-    public NodeWork(CacheNode<T> node, CacheRegion cacheRegion, int pos) {
+    public NodeWork(CacheNode<T> node, CacheRegionType cacheRegion, int pos) {
         this.cacheRegion = cacheRegion;
         this.pos = pos;
         this.cacheNode = node;

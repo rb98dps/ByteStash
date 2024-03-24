@@ -13,7 +13,7 @@ import java.util.concurrent.TimeUnit;
 
 public class Crawler<T> {
     private static final Logger logger = LoggerFactory.getLogger(Crawler.class);
-    List<HashMap<CacheRegion, Timestamp>> oldestTimeStamps;
+    List<HashMap<CacheRegionType, Timestamp>> oldestTimeStamps;
     List<CacheNode<T>> nodes;
     @Getter
     List<NodeCrawler<T>> crawlers;
@@ -22,7 +22,7 @@ public class Crawler<T> {
     TaskQueueHandler<T> taskQueueHandler;
     private final ScheduledExecutorService scheduler;
 
-    protected void changeOldTimeStamp(int pos, CacheRegion region, Timestamp timestamp) {
+    protected void changeOldTimeStamp(int pos, CacheRegionType region, Timestamp timestamp) {
         logger.debug("Changed TimeStamp for Node:{} from {} to {}", pos, this.oldestTimeStamps.get(pos).get(region), timestamp);
         this.oldestTimeStamps.get(pos).put(region, timestamp);
     }
@@ -32,10 +32,10 @@ public class Crawler<T> {
         this.nodes = nodes;
         oldestTimeStamps = new ArrayList<>();
         nodes.forEach(node -> {
-            HashMap<CacheRegion, Timestamp> map = new HashMap<>();
-            map.put(CacheRegion.HOT, Timestamp.from(Instant.now()));
-            map.put(CacheRegion.WARM, Timestamp.from(Instant.now()));
-            map.put(CacheRegion.COLD, Timestamp.from(Instant.now()));
+            HashMap<CacheRegionType, Timestamp> map = new HashMap<>();
+            map.put(CacheRegionType.HOT, Timestamp.from(Instant.now()));
+            map.put(CacheRegionType.WARM, Timestamp.from(Instant.now()));
+            map.put(CacheRegionType.COLD, Timestamp.from(Instant.now()));
             oldestTimeStamps.add(map);
         });
         this.noOfCrawlers = noOfCrawlers;
@@ -69,12 +69,12 @@ public class Crawler<T> {
     }
 
     protected void scheduleTaskToQueue() {
-        List<HashMap<CacheRegion, Timestamp>> listCopy = new ArrayList<>(oldestTimeStamps);
+        List<HashMap<CacheRegionType, Timestamp>> listCopy = new ArrayList<>(oldestTimeStamps);
         for (int i = 0; i < listCopy.size(); i++) {
             if (nodes.get(i).getFilledCapacity() > 0) {
                 long ttlForNode = nodes.get(i).getTtl();
-                for (Map.Entry<CacheRegion, Timestamp> entry : listCopy.get(i).entrySet()) {
-                    CacheRegion region = entry.getKey();
+                for (Map.Entry<CacheRegionType, Timestamp> entry : listCopy.get(i).entrySet()) {
+                    CacheRegionType region = entry.getKey();
                     Timestamp timestamp1 = entry.getValue();
                     Timestamp timestamp = Timestamp.from(Instant.now());
                     if (timestamp.toInstant().toEpochMilli() - timestamp1.toInstant().toEpochMilli() > (ttlForNode * 1000)) {

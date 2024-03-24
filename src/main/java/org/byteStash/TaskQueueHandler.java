@@ -18,7 +18,7 @@ public class TaskQueueHandler<T> {
 
     }
 
-    public synchronized void addTask(CacheNode<T> node, CacheRegion cacheRegion, int pos) {
+    public synchronized void addTask(CacheNode<T> node, CacheRegionType cacheRegion, int pos) {
         NodeWork<T> work = new NodeWork<>(node, cacheRegion, pos);
         if (MAX_SIZE >= queue.size()) {
             queue.add(work);

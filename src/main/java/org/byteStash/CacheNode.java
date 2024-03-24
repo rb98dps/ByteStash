@@ -9,7 +9,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
+import java.util.concurrent.ConcurrentMap;
 
 public class CacheNode<T> {
 
@@ -29,7 +29,9 @@ public class CacheNode<T> {
 
     private ConcurrentHashMap<String, CacheItem<T>> localCache;
 
-    protected Map<CacheRegion, LinkedHashSet<String>> regions;
+    private ConcurrentHashMap<String, CacheItem<T>> localHotCache;
+
+    protected Map<CacheRegionType, CacheRegion> regions;
 
     private final int index;
 
@@ -56,10 +58,123 @@ public class CacheNode<T> {
 
     }
 
+    private void generateCache(long capacity, float hotPercent, float warmPercent, float coldPercent) {
 
-    Timestamp removeAllExpiredItems(CacheRegion region) {
+        hotRegionSize = (long) (capacity * hotPercent);
+        warmRegionSize = (long) (capacity * warmPercent);
+        coldRegionSize = (long) (capacity * coldPercent);
+        regions = new HashMap<>();
+        regions.put(CacheRegionType.HOT, new CacheRegion((int) hotRegionSize));
+        regions.put(CacheRegionType.WARM, new CacheRegion((int) warmRegionSize));
+        regions.put(CacheRegionType.COLD, new CacheRegion((int) coldRegionSize));
+        localCache = new ConcurrentHashMap<>();
+        localHotCache = new ConcurrentHashMap<>();
+    }
+
+    public void put(String key, T value) {
+
+        if (localHotCache.containsKey(key)) {
+            CacheItem<T> item = localHotCache.get(key);
+            item.setValue(value);
+            item.setActive(true);
+            item.setTimestamp(Timestamp.from(Instant.now()));
+        } else if (localCache.containsKey(key)) {
+            CacheItem<T> item = localCache.get(key);
+            item.setValue(value);
+            item.setActive(true);
+            if (!CacheRegionType.WARM.equals(item.getRegion())) {
+                addKeyToDifferentRegion(key, CacheRegionType.WARM, item);
+            }
+            item.setTimestamp(Timestamp.from(Instant.now()));
+        } else {
+            localHotCache.put(key, new CacheItem<>(value, CacheRegionType.HOT, Timestamp.from(Instant.now()), index));
+            filledCapacity++;
+            addNewKeyToRegion(key, CacheRegionType.HOT);
+            ensureHotRegionSize();
+        }
+    }
+
+    public void addNewKeyToRegion(String key, CacheRegionType region) {
+        regions.get(region).add(key);
+    }
+
+    public T get(String key) {
+        if (localHotCache.containsKey(key)) {
+            return updateKeyDetails(key, localHotCache);
+        }
+        if (localCache.containsKey(key)) {
+            return updateKeyDetails(key, localCache);
+        }
+        return null;
+    }
+
+    private T updateKeyDetails(String key, ConcurrentHashMap<String, CacheItem<T>> cache) {
+        CacheItem<T> item = cache.get(key);
+        keyAccessedAgain(key, item);
+        item.setTimestamp(Timestamp.from(Instant.now()));
+        return item.getValue();
+    }
+
+    private void keyAccessedAgain(String key, CacheItem<T> item) {
+        item.setActive(true);
+        CacheRegionType region = item.getRegion();
+        if (!CacheRegionType.HOT.equals(region)) {
+            addKeyToDifferentRegion(key, CacheRegionType.WARM, item);
+        }
+    }
+
+    private void addKeyToDifferentRegion(String key, CacheRegionType region, CacheItem<T> item) {
+        removeFromRegion(key);
+        regions.get(region).add(key);
+        item.setRegion(region);
+        ensureRegionSize(region);
+    }
+
+    public T remove(String key) {
+        CacheItem<T> item = removeFromCacheAndRegion(key, localHotCache);
+        item = item != null ? item : removeFromCacheAndRegion(key, localCache);
+        return item != null ? item.getValue() : null;
+    }
+
+    public void transferFromHotCache(String key) {
+        CacheItem<T> item = removeFromCacheAndRegion(key, localHotCache);
+        if (!item.isActive()) {
+            localCache.put(key, item);
+            filledCapacity++;
+            addKeyToDifferentRegion(key, CacheRegionType.COLD, item);
+        } else {
+            localCache.put(key, item);
+            filledCapacity++;
+            addKeyToDifferentRegion(key, CacheRegionType.WARM, item);
+        }
+    }
+
+    public CacheItem<T> removeFromCacheAndRegion(String key, ConcurrentMap<String, CacheItem<T>> cache) {
+        if (cache.containsKey(key)) {
+            CacheItem<T> removedItem = cache.remove(key);
+            if (null != removedItem) {
+                regions.get(removedItem.getRegion()).remove(key);
+                filledCapacity--;
+                return removedItem;
+            }
+        }
+        return null;
+    }
+
+
+    public void removeFromRegion(String key) {
+        if (localHotCache.containsKey(key)) {
+            CacheItem<T> item = localHotCache.get(key);
+            regions.get(item.getRegion()).remove(key);
+        } else if (localCache.containsKey(key)) {
+            CacheItem<T> item = localCache.get(key);
+            regions.get(item.getRegion()).remove(key);
+        }
+    }
+
+    Timestamp removeAllExpiredItems(CacheRegionType region) {
         Timestamp oldestTimestamp = Timestamp.from(Instant.now());
-        List<String> set = new ArrayList<>(regions.get(region));
+        List<String> set = new ArrayList<>(regions.get(region).region);
         for (String key : set) {
             Timestamp timestamp = removeKeyIfExpired(key, region);
             if (timestamp != null) {
@@ -72,85 +187,28 @@ public class CacheNode<T> {
         return oldestTimestamp;
     }
 
-    public Timestamp removeKeyIfExpired(String key, CacheRegion region) {
-        CacheItem<T> item = localCache.get(key);
-
-        long life = (Instant.now().toEpochMilli() - item.getTimestamp().toInstant().toEpochMilli()) / 1000;
-        if (life > ttl) {
-            remove(key);
-        } else {
-            return item.getTimestamp();
-        }
-        return null;
-    }
-
-    private void generateCache(long capacity, float hotPercent, float warmPercent, float coldPercent) {
-
-        hotRegionSize = (long) (capacity * hotPercent);
-        warmRegionSize = (long) (capacity * warmPercent);
-        coldRegionSize = (long) (capacity * coldPercent);
-        regions = new HashMap<>();
-        regions.put(CacheRegion.HOT, new LinkedHashSet<>((int) hotRegionSize));
-        regions.put(CacheRegion.WARM, new LinkedHashSet<>((int) warmRegionSize));
-        regions.put(CacheRegion.COLD, new LinkedHashSet<>((int) coldRegionSize));
-        localCache = new ConcurrentHashMap<>();
-    }
-
-    public void put(String key, T value) {
-        if (localCache.containsKey(key)) {
-            CacheItem<T> item = localCache.get(key);
-            item.setValue(value);
-            item.setActive(true);
-            if (!CacheRegion.HOT.equals(item.getRegion())) {
-                addKeyToRegion(key, CacheRegion.WARM, item);
+    public Timestamp removeKeyIfExpired(String key, CacheRegionType region) {
+        if (region.equals(CacheRegionType.HOT)) {
+            CacheItem<T> item = localHotCache.get(key);
+            long life = (Instant.now().toEpochMilli() - item.getTimestamp().toInstant().toEpochMilli()) / 1000;
+            if (life > ttl) {
+                remove(key);
+            } else {
+                return item.getTimestamp();
             }
-            item.setTimestamp(Timestamp.from(Instant.now()));
         } else {
-            localCache.put(key, new CacheItem<>(value, CacheRegion.HOT, Timestamp.from(Instant.now()), index));
-            filledCapacity++;
-            regions.get(CacheRegion.HOT).add(key);
-            ensureHotRegionSize();
-        }
-    }
-
-    public T get(String key) {
-        if (localCache.containsKey(key)) {
             CacheItem<T> item = localCache.get(key);
-            keyAccessedAgain(key, item);
-            item.setTimestamp(Timestamp.from(Instant.now()));
-            return item.getValue();
-        }
-        return null;
-    }
-
-    private void keyAccessedAgain(String key, CacheItem<T> item) {
-        item.setActive(true);
-        CacheRegion region = item.getRegion();
-        if (!CacheRegion.HOT.equals(region)) {
-            addKeyToRegion(key, CacheRegion.WARM, item);
-        }
-    }
-
-    private void addKeyToRegion(String key, CacheRegion region, CacheItem<T> item) {
-        removeFromRegion(key);
-        regions.get(region).add(key);
-        item.setRegion(region);
-        ensureRegionSize(region);
-    }
-
-    public T remove(String key) {
-        if (localCache.containsKey(key)) {
-            CacheItem<T> removedItem = localCache.remove(key);
-            if (null != removedItem) {
-                regions.get(removedItem.getRegion()).remove(key);
-                filledCapacity--;
-                return removedItem.getValue();
+            long life = (Instant.now().toEpochMilli() - item.getTimestamp().toInstant().toEpochMilli()) / 1000;
+            if (life > ttl) {
+                remove(key);
+            } else {
+                return item.getTimestamp();
             }
         }
         return null;
     }
 
-    private void ensureRegionSize(CacheRegion region) {
+    private void ensureRegionSize(CacheRegionType region) {
         switch (region) {
             case HOT -> ensureHotRegionSize();
             case WARM -> ensureWarmRegionSize();
@@ -158,48 +216,53 @@ public class CacheNode<T> {
         }
     }
 
-    public void removeFromRegion(String key) {
-        if (localCache.containsKey(key)) {
-            CacheItem<T> item = localCache.get(key);
-            regions.get(item.getRegion()).remove(key);
-        }
-    }
-
     private void ensureHotRegionSize() {
 
-        LinkedHashSet<String> hotRegion = regions.get(CacheRegion.HOT);
-        while (hotRegion.size() > hotRegionSize) {
-            String key = hotRegion.iterator().next();
-            if (!localCache.get(key).isActive()) {
-                addKeyToRegion(key, CacheRegion.COLD, localCache.get(key));
-            } else {
-                addKeyToRegion(key, CacheRegion.WARM, localCache.get(key));
-            }
+        CacheRegion cacheRegion = regions.get(CacheRegionType.HOT);
+        while (cacheRegion.counter.getSize() > hotRegionSize) {
+            String key = cacheRegion.region.iterator().next();
+            CacheItem<T> cacheItem = localHotCache.get(key);
+            transferFromHotCache(key);
         }
     }
 
     private void ensureWarmRegionSize() {
-        LinkedHashSet<String> warmRegion = regions.get(CacheRegion.WARM);
-        while (warmRegion.size() > warmRegionSize) {
-            String key = warmRegion.iterator().next();
-            addKeyToRegion(key, CacheRegion.COLD, localCache.get(key));
+        CacheRegion cacheRegion = regions.get(CacheRegionType.WARM);
+        while (cacheRegion.counter.getSize() > warmRegionSize) {
+            String key = cacheRegion.region.iterator().next();
+            addKeyToDifferentRegion(key, CacheRegionType.COLD, localCache.get(key));
         }
     }
 
     private void ensureColdRegionSize() {
 
-        LinkedHashSet<String> coldRegion = regions.get(CacheRegion.COLD);
-        while (coldRegion.size() > coldRegionSize) {
-            String key = coldRegion.iterator().next();
+        CacheRegion cacheRegion = regions.get(CacheRegionType.COLD);
+        while (cacheRegion.counter.getSize() > coldRegionSize) {
+            String key = cacheRegion.region.iterator().next();
             remove(key);
         }
     }
 
     public void printCacheState() {
-        logger.debug("Node Capacity {}, hot size: {}, warm size: {} , cold size: {}", capacity, hotRegionSize, warmRegionSize, coldRegionSize);
-        logger.debug("Node : {} , Cache State: {} ", index, localCache);
-        logger.debug("Node : {} , Hot Region: {}", index, regions.get(CacheRegion.HOT));
-        logger.debug("Node : {} , Warm Region: {}", index, regions.get(CacheRegion.WARM));
-        logger.debug("Node : {} , Cold Region: {}", index, regions.get(CacheRegion.COLD));
+        logger.debug("Node filledCapacity {}, hot size: {}, warm size: {} , cold size: {}", filledCapacity, regions.get(CacheRegionType.HOT).counter.getSize(), regions.get(CacheRegionType.WARM).counter.getSize(), regions.get(CacheRegionType.COLD).counter.getSize());
+        logger.debug("Node : {} , Hot Cache State: {} ", index, localHotCache.keySet());
+        logger.debug("Node : {} , Cache State: {} ", index, localCache.keySet());
+        logger.debug("Node : {} , Hot Region: {}", index, regions.get(CacheRegionType.HOT));
+        logger.debug("Node : {} , Warm Region: {}", index, regions.get(CacheRegionType.WARM));
+        logger.debug("Node : {} , Cold Region: {}", index, regions.get(CacheRegionType.COLD));
+    }
+
+    public void checkCacheAndRegion() {
+
+        var test1 = localHotCache.keySet().equals(regions.get(CacheRegionType.HOT).region);
+        HashSet<String> set = new HashSet<>(regions.get(CacheRegionType.WARM).region);
+        set.addAll(regions.get(CacheRegionType.COLD).region);
+        var test2 = localCache.keySet().equals(set);
+        var test3 = filledCapacity==(localCache.size() + localHotCache.size());
+
+        if(!test1 || !test2 || !test3){
+            throw new RuntimeException("Found Bug");
+        }
+
     }
 }

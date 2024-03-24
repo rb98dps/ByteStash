@@ -26,7 +26,7 @@ public class NodeCrawler<T> {
         scheduler = Executors.newSingleThreadScheduledExecutor();
     }
 
-    public synchronized void nodeCleanup(CacheNode<T> node, CacheRegion cacheRegion, int pos) {
+    public synchronized void nodeCleanup(CacheNode<T> node, CacheRegionType cacheRegion, int pos) {
         logger.debug("Started cleaning of node {}, region {}", node, cacheRegion);
         busy = true;
         try {
