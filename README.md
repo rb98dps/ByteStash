@@ -1,12 +1,15 @@
 
-<img src="./scripts/logo.png" alt="ByteStash" height="240" width="850">
+<div align="center">
+    <img src="./scripts/logo.png" alt="ByteStash" height="400" width="700">
+</div>
 
-## ByteStash - A High Performance inbuilt Caching tool with multi node capabilities
+# ByteStash 
+### A High Performance inbuilt Caching tool with multi node capabilities
 
--------------
 ByteStash is an easy to use inbuilt java cache library that is customizable in every aspect, inspiring from Memcached implementation with multi node capability running on different threads.
 This cache just like Memcached has three regions hot,warm and cold, refer [Memcached Implementation](https://memcached.org/blog/modern-lru/#:~:text=HOT%20and%20WARM%20LRU%27s%20are,in%20the%20active%20queues%20needlessly.)
 for more reference. 
+
 -------------
 # Usage 
 1) Build the project by taking a clone of main branch and using java 8+ so that all the dependencies are downloaded.
