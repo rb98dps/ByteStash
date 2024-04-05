@@ -1,33 +1,35 @@
-package org.byteStash;
+package org.bytestash.taskhandler;
 
+import org.bytestash.cache.CacheRegionType;
+import org.bytestash.cache.Crawlable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.LinkedList;
 import java.util.Queue;
 
-public class TaskQueueHandler<T> {
+public class TaskQueueHandler {
     private static final Logger logger = LoggerFactory.getLogger(TaskQueueHandler.class);
-    private Queue<NodeWork<T>> queue;
+    private Queue<NodeWork> queue;
 
     private final int MAX_SIZE;
 
-    TaskQueueHandler(int maxSize) {
+    public TaskQueueHandler(int maxSize) {
         MAX_SIZE = maxSize;
         queue = new LinkedList<>();
 
     }
 
-    public synchronized void addTask(CacheNode<T> node, CacheRegionType cacheRegion, int pos) {
-        NodeWork<T> work = new NodeWork<>(node, cacheRegion, pos);
+    public synchronized void addTask(Crawlable crawlable, CacheRegionType cacheRegion, int pos) {
+        NodeWork work = new NodeWork(crawlable, cacheRegion, pos);
         if (MAX_SIZE >= queue.size()) {
             queue.add(work);
-            logger.debug("Task added for Node {} at pos {}",node,pos);
+            logger.debug("Task added for Node {} at pos {}",crawlable,pos);
         }
 
     }
 
-    public synchronized NodeWork<T> removeTask() {
+    public synchronized NodeWork removeTask() {
         if (!queue.isEmpty()) {
             return queue.poll();
         } else {

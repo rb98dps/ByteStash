@@ -1,7 +1,8 @@
-package org.byteStash;
+package org.bytestash.creator;
 
 import lombok.Builder;
 import lombok.Getter;
+import org.bytestash.crawler.CrawlerType;
 
 import javax.management.BadAttributeValueExpException;
 
@@ -14,6 +15,8 @@ public class ByteStashFactory<T> {
     Float warmPercent;
     Long timeToLive;
     Integer queueSize;
+
+    CrawlerType type;
 
     @Getter
     private final ByteStash<T> byteStash;
@@ -30,6 +33,6 @@ public class ByteStashFactory<T> {
     }
 
     private ByteStash<T> createByteStash() throws BadAttributeValueExpException {
-        return new ByteStash<>(nodes, capacity, hotPercent, warmPercent, timeToLive, queueSize);
+        return new ByteStash<>(nodes, capacity, hotPercent, warmPercent, timeToLive, queueSize,type);
     }
 }

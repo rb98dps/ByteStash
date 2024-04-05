@@ -1,12 +1,16 @@
-package org.byteStash;
+package org.bytestash.creator;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.bytestash.crawler.Crawler;
+import org.bytestash.crawler.CrawlerType;
+import org.bytestash.crawler.timeBasedCrawler.TTLBasedCrawler;
+import org.bytestash.taskhandler.TaskQueueHandler;
+import org.bytestash.cache.CacheNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.management.BadAttributeValueExpException;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.ObjectOutputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
@@ -19,31 +23,33 @@ public class ByteStash<T> {
     private static final int MIN_QUEUE_SIZE = 1000;
 
     private static final long MINIMUM_TTL = 30L;
+
+    private static final int MAX_NODES = 12;
+    private static final int MIN_NODES = 1;
+
     List<CacheNode<T>> nodes;
 
     Crawler<T> crawler;
 
-    TaskQueueHandler<T> queueHandler;
+    TaskQueueHandler queueHandler;
 
+    private final ObjectMapper objectMapper = new ObjectMapper();
     int numNodes;
 
-    protected ByteStash(Integer nodesCount, Long capacity, Float hotPercent, Float warmPercent, Long timeToLive, Integer queueSize) throws BadAttributeValueExpException {
+    protected ByteStash(Integer nodesCount, Long capacity, Float hotPercent, Float warmPercent, Long timeToLive, Integer queueSize, CrawlerType type) throws BadAttributeValueExpException {
 
-        if (nodesCount == null) {
-            throw new BadAttributeValueExpException("Number of Nodes can not be null");
-        }
         if (capacity == null) {
             throw new BadAttributeValueExpException("Capacity can not be null");
         }
-        if (nodesCount == 0) {
-            throw new BadAttributeValueExpException("Nodes can not be 0");
+        this.numNodes = nodesCount == null ? MIN_NODES : Math.min(nodesCount, MAX_NODES);
+        if (this.numNodes <= 0) {
+            throw new BadAttributeValueExpException("Nodes can not be 0 or less than 0");
         }
-        if (capacity == 0) {
+        if (capacity <= 0) {
             throw new BadAttributeValueExpException("Capacity can not be 0");
         }
 
-        this.numNodes = nodesCount;
-        long capacityPerNode = checkMinimumRequirement(capacity, MINIMUM_CAPACITY)/numNodes;
+        long capacityPerNode = checkMinimumRequirement(capacity, MINIMUM_CAPACITY) / numNodes;
         long ttl = timeToLive == null ? MINIMUM_TTL : checkMinimumRequirement(timeToLive, MINIMUM_TTL);
         int queueLength = queueSize == null ? MIN_QUEUE_SIZE : Math.max(queueSize, MIN_QUEUE_SIZE);
         hotPercent = hotPercent == null ? 0f : hotPercent;
@@ -51,8 +57,10 @@ public class ByteStash<T> {
 
         int noOfCrawlers = numNodes / 4 + 1;
         createNodes(capacityPerNode, hotPercent, warmPercent, ttl);
-        queueHandler = new TaskQueueHandler<>(queueLength);
-        crawler = new Crawler<>(nodes, noOfCrawlers, queueHandler);
+        queueHandler = new TaskQueueHandler(queueLength);
+        if (type == null || type.equals(CrawlerType.TTL)) {
+            crawler = new TTLBasedCrawler<>(nodes, noOfCrawlers, queueHandler);
+        }
     }
 
 
@@ -100,10 +108,7 @@ public class ByteStash<T> {
     }
 
     private String generateKey(Object keyObject, Class<?> clazz) throws IOException, NoSuchAlgorithmException {
-        ByteArrayOutputStream bos = new ByteArrayOutputStream();
-        ObjectOutputStream oos = new ObjectOutputStream(bos);
-        oos.writeObject(keyObject);
-        byte[] objectBytes = bos.toByteArray();
+        byte[] objectBytes = objectMapper.writeValueAsBytes(keyObject);
         String className = clazz.getName();
         byte[] combinedBytes = new byte[className.length() + objectBytes.length];
         System.arraycopy(className.getBytes(), 0, combinedBytes, 0, className.length());
@@ -116,7 +121,6 @@ public class ByteStash<T> {
             if (hex.length() == 1) hexString.append('0');
             hexString.append(hex);
         }
-
         return hexString.toString();
     }
 

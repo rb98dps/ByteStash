@@ -1,4 +1,4 @@
-package org.byteStash;
+package org.bytestash.cache;
 
 import lombok.Getter;
 import lombok.Setter;

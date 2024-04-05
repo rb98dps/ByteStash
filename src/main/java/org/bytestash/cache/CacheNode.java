@@ -1,6 +1,8 @@
-package org.byteStash;
+package org.bytestash.cache;
 
 import lombok.Getter;
+import org.bytestash.evictionpolicy.EvictionInfo;
+import org.bytestash.evictionpolicy.TimeStampBasedEvictionInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -11,7 +13,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
-public class CacheNode<T> {
+public class CacheNode<T> implements Crawlable {
 
     private static final Logger logger = LoggerFactory.getLogger(CacheNode.class);
     private long hotRegionSize;
@@ -21,10 +23,18 @@ public class CacheNode<T> {
     @Getter
     private final long capacity;
 
-    @Getter
     private long filledCapacity = 0;
 
-    @Getter
+    @Override
+    public long getFilledCapacity() {
+        return filledCapacity;
+    }
+
+    @Override
+    public long getTtl() {
+        return ttl;
+    }
+
     private long ttl;
 
     private ConcurrentHashMap<String, CacheItem<T>> localCache;
@@ -149,7 +159,7 @@ public class CacheNode<T> {
         }
     }
 
-    public CacheItem<T> removeFromCacheAndRegion(String key, ConcurrentMap<String, CacheItem<T>> cache) {
+    private CacheItem<T> removeFromCacheAndRegion(String key, ConcurrentMap<String, CacheItem<T>> cache) {
         if (cache.containsKey(key)) {
             CacheItem<T> removedItem = cache.remove(key);
             if (null != removedItem) {
@@ -172,7 +182,7 @@ public class CacheNode<T> {
         }
     }
 
-    Timestamp removeAllExpiredItems(CacheRegionType region) {
+    public EvictionInfo removeItems(CacheRegionType region) {
         Timestamp oldestTimestamp = Timestamp.from(Instant.now());
         List<String> set = new ArrayList<>(regions.get(region).region);
         for (String key : set) {
@@ -184,7 +194,8 @@ public class CacheNode<T> {
                 }
             }
         }
-        return oldestTimestamp;
+
+        return new TimeStampBasedEvictionInfo(oldestTimestamp);
     }
 
     public Timestamp removeKeyIfExpired(String key, CacheRegionType region) {
@@ -221,7 +232,6 @@ public class CacheNode<T> {
         CacheRegion cacheRegion = regions.get(CacheRegionType.HOT);
         while (cacheRegion.counter.getSize() > hotRegionSize) {
             String key = cacheRegion.region.iterator().next();
-            CacheItem<T> cacheItem = localHotCache.get(key);
             transferFromHotCache(key);
         }
     }
@@ -258,11 +268,12 @@ public class CacheNode<T> {
         HashSet<String> set = new HashSet<>(regions.get(CacheRegionType.WARM).region);
         set.addAll(regions.get(CacheRegionType.COLD).region);
         var test2 = localCache.keySet().equals(set);
-        var test3 = filledCapacity==(localCache.size() + localHotCache.size());
+        var test3 = filledCapacity == (localCache.size() + localHotCache.size());
 
-        if(!test1 || !test2 || !test3){
+        if (!test1 || !test2 || !test3) {
             throw new RuntimeException("Found Bug");
         }
 
     }
+
 }
