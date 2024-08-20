@@ -10,7 +10,7 @@ import java.util.Queue;
 
 public class TaskQueueHandler {
     private static final Logger logger = LoggerFactory.getLogger(TaskQueueHandler.class);
-    private Queue<NodeWork> queue;
+    private volatile Queue<NodeWork> queue;
 
     private final int MAX_SIZE;
 

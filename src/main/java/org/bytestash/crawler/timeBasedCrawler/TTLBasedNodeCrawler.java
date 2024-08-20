@@ -18,17 +18,18 @@ public class TTLBasedNodeCrawler<T> implements NodeCrawler<T> {
     private static final Logger logger = LoggerFactory.getLogger(TTLBasedNodeCrawler.class);
     boolean busy;
     private final ScheduledExecutorService scheduler;
-    org.bytestash.crawler.timeBasedCrawler.TTLBasedCrawler<T> TTLBasedCrawler;
+    TTLBasedCrawlerManager<T> TTLBasedCrawler;
     TaskQueueHandler taskQueueHandler;
 
     private final int index;
 
-    public TTLBasedNodeCrawler(boolean busy, TTLBasedCrawler<T> TTLBasedCrawler, TaskQueueHandler taskQueueHandler, int index) {
+    protected TTLBasedNodeCrawler(boolean busy, TTLBasedCrawlerManager<T> tTLBasedCrawler, TaskQueueHandler taskQueueHandler,
+                          int index) {
         this.busy = busy;
-        this.TTLBasedCrawler = TTLBasedCrawler;
+        this.TTLBasedCrawler = tTLBasedCrawler;
         this.taskQueueHandler = taskQueueHandler;
         this.index = index;
-        scheduler = Executors.newSingleThreadScheduledExecutor();
+        scheduler = Executors.newScheduledThreadPool(2);
     }
 
     public synchronized void nodeCleanup(Crawlable crawlable, CacheRegionType cacheRegion, int pos) {

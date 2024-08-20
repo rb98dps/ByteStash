@@ -1,5 +1,5 @@
 package org.bytestash.crawler;
 
-public interface Crawler<T> {
+public interface CrawlerManager<T> {
     String toString();
 }

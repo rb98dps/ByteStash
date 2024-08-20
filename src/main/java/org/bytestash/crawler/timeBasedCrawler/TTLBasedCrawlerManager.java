@@ -3,7 +3,7 @@ package org.bytestash.crawler.timeBasedCrawler;
 import lombok.Getter;
 import org.bytestash.cache.CacheRegionType;
 import org.bytestash.cache.Crawlable;
-import org.bytestash.crawler.Crawler;
+import org.bytestash.crawler.CrawlerManager;
 import org.bytestash.crawler.NodeCrawler;
 import org.bytestash.taskhandler.TaskQueueHandler;
 import org.slf4j.Logger;
@@ -11,13 +11,16 @@ import org.slf4j.LoggerFactory;
 
 import java.sql.Timestamp;
 import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-public class TTLBasedCrawler<T> implements Crawler<T> {
-    private static final Logger logger = LoggerFactory.getLogger(TTLBasedCrawler.class);
+public class TTLBasedCrawlerManager<T> implements CrawlerManager<T> {
+    private static final Logger logger = LoggerFactory.getLogger(TTLBasedCrawlerManager.class);
     List<HashMap<CacheRegionType, Timestamp>> oldestTimeStamps;
     List<? extends Crawlable> crawlables;
     @Getter
@@ -33,7 +36,7 @@ public class TTLBasedCrawler<T> implements Crawler<T> {
     }
 
 
-    public TTLBasedCrawler(List<? extends Crawlable> crawlables, int noOfCrawlers, TaskQueueHandler queueHandler) {
+    public TTLBasedCrawlerManager(List<? extends Crawlable> crawlables, int noOfCrawlers, TaskQueueHandler queueHandler) {
         this.crawlables = crawlables;
         oldestTimeStamps = new ArrayList<>();
         crawlables.forEach(node -> {

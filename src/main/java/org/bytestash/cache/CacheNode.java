@@ -13,7 +13,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
-public class CacheNode<T> implements Crawlable {
+public class CacheNode<T> implements Cache<String, T>, Crawlable {
 
     private static final Logger logger = LoggerFactory.getLogger(CacheNode.class);
     private long hotRegionSize;
@@ -35,7 +35,7 @@ public class CacheNode<T> implements Crawlable {
         return ttl;
     }
 
-    private long ttl;
+    private final int ttl;
 
     private ConcurrentHashMap<String, CacheItem<T>> localCache;
 
@@ -45,21 +45,22 @@ public class CacheNode<T> implements Crawlable {
 
     private final int index;
 
-    public CacheNode(long capacity, int index) throws BadAttributeValueExpException {
+    public CacheNode(long capacity, int index) {
         this(capacity, 0f, 0f, 240, index);
     }
 
-    public CacheNode(long capacity, long ttl, int index) throws BadAttributeValueExpException {
+    public CacheNode(long capacity, int ttl, int index) {
         this(capacity, 0f, 0f, ttl, index);
     }
 
-    public CacheNode(long capacity, float hotPercent, float warmPercent, long ttl, int index) throws BadAttributeValueExpException {
+    public CacheNode(long capacity, float hotPercent, float warmPercent, int ttl, int index) {
         this.index = index;
         if (hotPercent != 0f && warmPercent != 0f) {
             if (hotPercent + warmPercent > 0.5) {
-                throw new BadAttributeValueExpException("Hot and Cold can not be greater than 0.5");
+                generateCache(capacity, 0.1f, 0.2f, 0.7f);
+            } else {
+                generateCache(capacity, hotPercent, warmPercent, 1 - hotPercent - warmPercent);
             }
-            generateCache(capacity, hotPercent, warmPercent, 1 - hotPercent - warmPercent);
         } else {
             generateCache(capacity, 0.1f, 0.2f, 0.7f);
         }
